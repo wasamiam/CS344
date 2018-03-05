@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 int main(int argc, char **argv){
   // Variables
@@ -11,21 +13,26 @@ int main(int argc, char **argv){
   int status = 0;
   int pid_array[100]; // static ints are initialized as 0
   int n_pid = 0; // Number of process ids in the pid_array - used with exit command to minimize array search time.
+  int err = 0; // Hold error values from functions
   // Commandline loop
   do {
     // Check for completed background tasks
+    if (n_pid != 0) {
+
+    }
 
     // Print prompt
     printf(": ");
-    fflush();
+    fflush(stdout);
     // Read line
-    int er = scanf("%s", line);
+    err = scanf("%s", line);
     // Check for error
-    if (er < 0) {
+    if (err < 0) {
       printf("%s\n", "Failed to get line.");
+      fflush(stdout);
     }
     else{
-      token = strtok(line, ' '); // Get first token, which should be the command.
+      token = strtok(line, " "); // Get first token, which should be the command.
       if(token == "#"){} // Skip if comment
       // Else: NOT a comment
       else{
@@ -41,9 +48,10 @@ int main(int argc, char **argv){
             if(pid_array[i] == 0){}
             // Kill child process
             else{
-              int err = kill(pid_array[i], SIGTERM);
+              err = kill(pid_array[i], SIGTERM);
               if (err < 0) {
                 printf("%s\n", "Error killing child process.");
+                fflush(stdout);
               }
               pid_array[i] = 0; // Set pid to 0 once killed
               n_pid--;
@@ -52,11 +60,27 @@ int main(int argc, char **argv){
         }
         // Command is 'status'
         else if (strcmp(token, "status") == 0) {
-          /* code */
+          printf("%d\n", status);
+          fflush(stdout);
         }
         // Command is 'cd'
         else if (strcmp(token, "cd") == 0) {
-          /* code */
+          token = strtok(NULL, " "); // Should be the path to a new directory, or NULL.
+          if (token == NULL) {
+            err = chdir(getenv("HOME"));
+            if (err < 0) {
+              printf("%s\n", "Error while changing directory.");
+              fflush(stdout);
+            }
+          }
+          // Else: if another token is present, use as path.
+          else{
+            err = chdir(token);
+            if (err < 0) {
+              printf("%s\n", "Error while changing directory.");
+              fflush(stdout);
+            }
+          }
         }
         // Else: command is NOT built-in
         else{
@@ -67,7 +91,7 @@ int main(int argc, char **argv){
     }
 
 
-  } while();
+  } while(1);
 
 
   // Exit
