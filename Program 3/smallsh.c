@@ -21,7 +21,7 @@ int main(int argc, char **argv){
   char* command_array[512]; // Holds command and args to pass to execvp()
   char* prev_tok; // Holds pointer to previous token - used with &
   int ca_i = 0; // Holds current index in command_array
-  int arg_flag; // 0 means arguments can be entered, 1 means they cannot. Changed once redirection is found.
+  int arg_flag = 0; // 0 means arguments can be entered, 1 means they cannot. Changed once redirection is found.
 
   // Commandline loop
   do {
@@ -54,6 +54,9 @@ int main(int argc, char **argv){
       fflush(stdout);
     }
     else{
+      int l = strlen (line); // Remove newline
+      if (l > 0 && line[l - 1] == '\n'){line [l - 1] = '\0';}
+
       token = strtok(line, " "); // Get first token, which should be the command.
       if(token == "#"){} // Skip if comment
       // Else: NOT a comment
@@ -123,7 +126,7 @@ int main(int argc, char **argv){
               // Add arguments to command_array
               while ( (token = strtok(NULL, " ") ) != NULL) {
                 // Input to command
-                if (strcmp(token, "<")) {
+                if (strcmp(token, "<") == 0) {
                   if ((token = strtok(NULL, " ") ) != NULL) {
                     fr = open(token, O_RDONLY); // Open for read only
                     if (fr == -1) {
@@ -136,7 +139,7 @@ int main(int argc, char **argv){
                   arg_flag = 1;
                 }
                 // Output from command
-                else if (strcmp(token, ">")) {
+                else if (strcmp(token, ">") == 0) {
                   if ((token = strtok(NULL, " ") ) != NULL) {
                     fo = open(token, O_WRONLY | O_CREAT | O_TRUNC, 0644); // Open only
                     if (fo == -1) {
@@ -149,8 +152,9 @@ int main(int argc, char **argv){
                   arg_flag = 1;
                 }
                 // Token is an argument
-                else if (arg_flag == 0){
-                  command_array[ca_i] = token;
+                if (arg_flag == 0){
+                  strcpy(arg_list[ca_i], token);
+                  command_array[ca_i] = arg_list[ca_i];
                   ca_i++;
                 }
               }
@@ -158,7 +162,7 @@ int main(int argc, char **argv){
               command_array[ca_i] = NULL; // Make sure last pointer is NULL
               printf("%s", command_array[0]);
               fflush(stdout);
-              printf("%s", command_array[1]);
+              printf("%s", arg_list[1]);
               fflush(stdout);
               printf("%s", command_array[2]);
               fflush(stdout);
