@@ -17,6 +17,11 @@ int main(int argc, char **argv){
   int n_pid = 0; // Number of process ids in the pid_array - used with exit command to minimize array search time.
   int err = 0; // Hold error values from functions
   int i = 0; // hold number for loops
+  char arg_list[512][100];
+  char* command_array[512]; // Holds command and args to pass to execvp()
+  char* prev_tok; // Holds pointer to previous token - used with &
+  int ca_i = 0; // Holds current index in command_array
+  int arg_flag; // 0 means arguments can be entered, 1 means they cannot. Changed once redirection is found.
 
   // Commandline loop
   do {
@@ -109,13 +114,9 @@ int main(int argc, char **argv){
               break;
             case 0:
               // Child
-              char command_array[512][100]; // Holds command and args to pass to execvp()
-              command_str[511] = NULL; // Make sure last pointer is NULL
-              int ca_i = 0; // Holds current index in command_array
-              int arg_flag; // 0 means arguments can be entered, 1 means they cannot. Changed once redirection is found.
-
-              command_array[ca_i] = token; // First pointer is command string
-
+              strcpy(arg_list[0], token);
+              command_array[0] = arg_list[0]; // First pointer is command string
+              ca_i = 1;
               int fr;
               int fo;
 
@@ -153,10 +154,22 @@ int main(int argc, char **argv){
                   ca_i++;
                 }
               }
+
+              command_array[ca_i] = NULL; // Make sure last pointer is NULL
+              printf("%s", command_array[0]);
+              fflush(stdout);
+              printf("%s", command_array[1]);
+              fflush(stdout);
+              printf("%s", command_array[2]);
+              fflush(stdout);
+              err = execvp(command_array[0], command_array);
+              if (err == -1) {
+                perror("Error: ");
+                exit(1);
+              }
               break;
             default:
               // Parent
-              char* prev_tok; // Holds pointer to previous token - used with &
               while ((token = strtok(NULL, " ") ) != NULL) {
                 prev_tok = token;
               }
