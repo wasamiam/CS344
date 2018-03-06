@@ -24,6 +24,7 @@ int main(int argc, char **argv){
   char* prev_tok; // Holds pointer to previous token - used with &
   int ca_i = 0; // Holds current index in command_array
   int arg_flag = 0; // 0 means arguments can be entered, 1 means they cannot. Changed once redirection is found.
+  int bg_flag = 0; // 0 means foreground, 1 means background.
   pid_t pid = getpid();
 
 
@@ -31,19 +32,36 @@ int main(int argc, char **argv){
   // Commandline loop
   do {
     // Check for completed background tasks
-    if (n_pid != 0) {
+    if (n_pid > 0) {
       for (i = 0; i < 100; i++) {
         if (n_pid == 0) {
           break;
         }
         // Check if valid id
-        if(pid_array[i] == 0){}
+        if(pid_array[i] == 0){
+        }
         // Wait for child
         else{
-          if (waitpid(pid_array[i], &status, WNOHANG) == pid_array[i]) {
+          pid_t t;
+          t = waitpid(pid_array[i], &status, WNOHANG);
+          if (t != 0) {
+            printf("Process %d complete\n", t);
+            fflush(stdout);
             pid_array[i] = 0; // Set pid to 0
             n_pid--;
           }
+          else{
+            printf("Process %d incomplete - pi: %d\n", t, pid_array[i]);
+            fflush(stdout);
+          }
+          /*
+          if ( t > -1) {
+            printf("Process %d complete\n", t);
+            fflush(stdout);
+            pid_array[i] = 0; // Set pid to 0
+            n_pid--;
+          }
+          */
         }
       }
 
@@ -60,12 +78,22 @@ int main(int argc, char **argv){
       fflush(stdout);
     }
     else{
-      int l = strlen (line); // Remove newline
-      if (l > 0 && line[l - 1] == '\n'){line [l - 1] = '\0';}
+      // reset flags
+      bg_flag = 0;
+      arg_flag = 0;
+
+      int l = strlen (line);
+      if (l > 0 && line[l - 1] == '\n'){line [l - 1] = '\0';} // Remove newline
+      l = strlen (line);
+      if (l > 0 && line[l - 1] == '&'){
+        line [l - 1] = '\0';
+        line [l - 2] = '\0';
+        bg_flag = 1;
+      } // Check for & and remove.
 
       replace_pid(line, pid);// Replace all $$ with process id
-      printf("line2:  %s\n", line);
-      fflush(stdout);
+      //printf("line2:  %s\n", line);
+      //fflush(stdout);
 
       token = strtok(line, " "); // Get first token, which should be the command.
       if(token == "#"){} // Skip if comment
@@ -151,7 +179,7 @@ int main(int argc, char **argv){
                 // Output from command
                 else if (strcmp(token, ">") == 0) {
                   if ((token = strtok(NULL, " ") ) != NULL) {
-                    fo = open(token, O_WRONLY | O_CREAT | O_TRUNC, 0644); // Open only
+                    fo = open(token, O_WRONLY | O_CREAT | O_TRUNC, 0644); // Open for write only
                     if (fo == -1) {
                       perror("Error");
                       exit(1);
@@ -169,15 +197,16 @@ int main(int argc, char **argv){
                 }
               }
 
+              if (arg_flag == 0 && bg_flag == 1 ) {
+                fr = open("/dev/null", O_RDONLY); // Open for read only
+                fo = open("/dev/null", O_WRONLY); // Open for write only
+                fcntl(fr, F_SETFD, FD_CLOEXEC);
+                fcntl(fo, F_SETFD, FD_CLOEXEC);
+                dup2(fr, 0);
+                dup2(fo, 1);
+              }
               command_array[ca_i] = NULL; // Make sure last pointer is NULL
-              /*
-              printf("%s", command_array[0]);
-              fflush(stdout);
-              printf("%s", arg_list[1]);
-              fflush(stdout);
-              printf("%s", command_array[2]);
-              fflush(stdout);
-              */
+
               err = execvp(command_array[0], command_array);
               if (err == -1) {
                 perror("Error");
@@ -186,18 +215,21 @@ int main(int argc, char **argv){
               break;
             default:
               // Parent
-              while ((token = strtok(NULL, " ") ) != NULL) {
-                prev_tok = token;
-              }
-              if (strcmp(prev_tok, "&") != 0) {
+              if (bg_flag == 0) {
                 int tmp;
-                wait(&tmp);
-                if(tmp != 0){
-                  status = 1;
+                wait(&status);
+              }
+              // Else: add child id to array and move on. Background case.
+              else{
+                for (i = 0; i < 100; i++) {
+                  if (pid_array[i] == 0) {
+                    pid_array[i] = returnid;
+                    n_pid++;
+                    printf("Child id: %d\n", pid_array[i]);
+                    fflush(stdout);
+                    break;
+                  }
                 }
-                else{
-                  status = 0;
-                }// Set all errors to 1
               }
               break;
           }
@@ -219,6 +251,7 @@ void replace_pid (char line[3000], pid_t pid){
   char tmp2[100] = "";
   char id[10];
   sprintf(id, "%d",(int)pid);
+  fflush(stdout);
 
   // Check if $$ is at end.
   int l = strlen (line);
