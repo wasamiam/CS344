@@ -8,9 +8,11 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+void replace_pid (char line[], pid_t pid);
+
 int main(int argc, char **argv){
   // Variables
-  char line[2048] = "";
+  char line[3000] = "";
   char* token;
   int status = 0;
   pid_t pid_array[100]; // static arrays are initialized as 0
@@ -22,6 +24,9 @@ int main(int argc, char **argv){
   char* prev_tok; // Holds pointer to previous token - used with &
   int ca_i = 0; // Holds current index in command_array
   int arg_flag = 0; // 0 means arguments can be entered, 1 means they cannot. Changed once redirection is found.
+  pid_t pid = getpid();
+
+
 
   // Commandline loop
   do {
@@ -43,10 +48,11 @@ int main(int argc, char **argv){
       }
 
     }
-
     // Print prompt
     printf(": ");
     fflush(stdout);
+
+    strcpy(line, ""); // Clear line
     // Read line
     // Check for error
     if (fgets(line, 2048, stdin) == NULL) {
@@ -56,6 +62,10 @@ int main(int argc, char **argv){
     else{
       int l = strlen (line); // Remove newline
       if (l > 0 && line[l - 1] == '\n'){line [l - 1] = '\0';}
+
+      replace_pid(line, pid);// Replace all $$ with process id
+      printf("line2:  %s\n", line);
+      fflush(stdout);
 
       token = strtok(line, " "); // Get first token, which should be the command.
       if(token == "#"){} // Skip if comment
@@ -84,7 +94,7 @@ int main(int argc, char **argv){
         }
         // Command is 'status'
         else if (strcmp(token, "status") == 0) {
-          printf("%d\n", status);
+          printf("exit value %d\n", status);
           fflush(stdout);
         }
         // Command is 'cd'
@@ -130,7 +140,7 @@ int main(int argc, char **argv){
                   if ((token = strtok(NULL, " ") ) != NULL) {
                     fr = open(token, O_RDONLY); // Open for read only
                     if (fr == -1) {
-                      perror("Error: ");
+                      perror("Error");
                       exit(1);
                     }
                     fcntl(fr, F_SETFD, FD_CLOEXEC);
@@ -143,7 +153,7 @@ int main(int argc, char **argv){
                   if ((token = strtok(NULL, " ") ) != NULL) {
                     fo = open(token, O_WRONLY | O_CREAT | O_TRUNC, 0644); // Open only
                     if (fo == -1) {
-                      perror("Error: ");
+                      perror("Error");
                       exit(1);
                     }
                     fcntl(fo, F_SETFD, FD_CLOEXEC);
@@ -160,15 +170,17 @@ int main(int argc, char **argv){
               }
 
               command_array[ca_i] = NULL; // Make sure last pointer is NULL
+              /*
               printf("%s", command_array[0]);
               fflush(stdout);
               printf("%s", arg_list[1]);
               fflush(stdout);
               printf("%s", command_array[2]);
               fflush(stdout);
+              */
               err = execvp(command_array[0], command_array);
               if (err == -1) {
-                perror("Error: ");
+                perror("Error");
                 exit(1);
               }
               break;
@@ -178,7 +190,14 @@ int main(int argc, char **argv){
                 prev_tok = token;
               }
               if (strcmp(prev_tok, "&") != 0) {
-                wait(&status);
+                int tmp;
+                wait(&tmp);
+                if(tmp != 0){
+                  status = 1;
+                }
+                else{
+                  status = 0;
+                }// Set all errors to 1
               }
               break;
           }
@@ -192,4 +211,32 @@ int main(int argc, char **argv){
 
   // Exit
   exit(0);
+}
+
+void replace_pid (char line[3000], pid_t pid){
+  char tmp_line[3000] = "";
+  char* tmp_tok;
+  char tmp2[100] = "";
+  char id[10];
+  sprintf(id, "%d",(int)pid);
+
+  // Check if $$ is at end.
+  int l = strlen (line);
+  if (line[l-1] == '$' && line[l-2] == '$') {
+    tmp_tok = strtok(line, "$$");
+    strcat(tmp_line, tmp_tok);
+    strcat(tmp_line, id);
+    strcpy(line, tmp_line);
+    return;
+  }
+
+  tmp_tok = strtok(line, "$$");
+  strcat(tmp_line, tmp_tok);
+
+  while ( (tmp_tok = strtok(NULL, "$$")) != NULL) {
+    strcat(tmp_line, id);
+    strcat(tmp_line, tmp_tok);
+  }
+  strcpy(line, tmp_line);
+  return;
 }
