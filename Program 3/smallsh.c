@@ -5,6 +5,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 int main(int argc, char **argv){
   // Variables
@@ -103,44 +105,67 @@ int main(int argc, char **argv){
           switch (returnid) {
             case -1:
               printf("Error - child not created");
+              fflush(stdout);
               break;
             case 0:
+              // Child
               char command_array[512][100]; // Holds command and args to pass to execvp()
               command_str[511] = NULL; // Make sure last pointer is NULL
               int ca_i = 0; // Holds current index in command_array
-              char* prev_tok; // Holds pointer to previous token - used with &
               int arg_flag; // 0 means arguments can be entered, 1 means they cannot. Changed once redirection is found.
 
               command_array[ca_i] = token; // First pointer is command string
 
+              int fr;
+              int fo;
+
               // Add arguments to command_array
               while ( (token = strtok(NULL, " ") ) != NULL) {
-                if (arg_flag == 0) {
-                  // input to command
-                  if (strcmp(token, "<")) {
-                    if ((token = strtok(NULL, " ") ) != NULL) {
-
+                // Input to command
+                if (strcmp(token, "<")) {
+                  if ((token = strtok(NULL, " ") ) != NULL) {
+                    fr = open(token, O_RDONLY); // Open for read only
+                    if (fr == -1) {
+                      perror("Error: ");
+                      exit(1);
                     }
+                    fcntl(fr, F_SETFD, FD_CLOEXEC);
+                    dup2(fr, 0);
                   }
-                  // output from command
-                  else if (strcmp(token, ">")) {
-                    /* code */
-                  }
-                  // Else: token is an argument
-                  else{
-                    strcat(command_str, token, 2048);
-
-                  }
+                  arg_flag = 1;
                 }
-
-
+                // Output from command
+                else if (strcmp(token, ">")) {
+                  if ((token = strtok(NULL, " ") ) != NULL) {
+                    fo = open(token, O_WRONLY | O_CREAT | O_TRUNC, 0644); // Open only
+                    if (fo == -1) {
+                      perror("Error: ");
+                      exit(1);
+                    }
+                    fcntl(fo, F_SETFD, FD_CLOEXEC);
+                    dup2(fo, 1);
+                  }
+                  arg_flag = 1;
+                }
+                // Token is an argument
+                else if (arg_flag == 0){
+                  command_array[ca_i] = token;
+                  ca_i++;
+                }
               }
               break;
             default:
+              // Parent
+              char* prev_tok; // Holds pointer to previous token - used with &
+              while ((token = strtok(NULL, " ") ) != NULL) {
+                prev_tok = token;
+              }
+              if (strcmp(prev_tok, "&") != 0) {
+                wait(&status);
+              }
               break;
           }
         }
-
       }
     }
 
