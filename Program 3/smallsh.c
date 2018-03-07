@@ -9,6 +9,8 @@
 #include <fcntl.h>
 
 void replace_pid (char line[], pid_t pid);
+void SIGINThandler(int sig);
+void SIGTSTPhandler(int sig);
 
 int main(int argc, char **argv){
   // Variables
@@ -28,7 +30,41 @@ int main(int argc, char **argv){
   pid_t pid = getpid();
 
 
+  /*
+  *  SIGNAL HANDLING
+  */
+  sigset_t mask;
+  sigfillset(&mask);
 
+  struct sigaction SIGINT_action = {
+    SIGINThandler,
+    mask,
+    0,
+    NULL
+  }, SIGTSTP_action = {
+    SIGTSTPhandler,
+    mask,
+    0,
+    NULL
+  };
+  signal(SIGINT, SIG_IGN);
+  /*
+  if (sigaction(SIGINT, &SIGINT_action, NULL) == -1) {
+    perror("Error: ");
+  }
+  */
+  if (sigaction(SIGTSTP, &SIGTSTP_action, NULL) == -1) {
+    perror("Error: ");
+  }
+
+  /*
+  SIGINT_action.sa_handler = catchSIGINT;
+  sigfillset(&SIGINT_action.sa_mask);
+  SIGINT_action.sa_flags = 0;
+  SIGTSTP_action.sa_handler = catchSIGUSR2;
+  sigfillset(&SIGUSR2_action.sa_mask);
+  SIGTSTP_action.sa_flags = 0;
+  */
   // Commandline loop
   do {
     // Check for completed background tasks
@@ -67,6 +103,7 @@ int main(int argc, char **argv){
 
     }
     // Print prompt
+    //fflush(stdout);
     printf(": ");
     fflush(stdout);
 
@@ -155,6 +192,7 @@ int main(int argc, char **argv){
               break;
             case 0:
               // Child
+              signal (SIGINT, SIG_DFL);
               strcpy(arg_list[0], token);
               command_array[0] = arg_list[0]; // First pointer is command string
               ca_i = 1;
@@ -216,8 +254,27 @@ int main(int argc, char **argv){
             default:
               // Parent
               if (bg_flag == 0) {
-                int tmp;
-                wait(&status);
+                int tmp = 0;
+                if (wait(&tmp) == -1) {
+                  perror("Error");
+                }
+                else{
+                  if (WIFSIGNALED(tmp)) {
+                    sscanf(status, "terminated by signal %d", WTERMSIG(tmp));
+                    printf("%s\n", status);
+                    fflush(stdout);
+                  }
+                  else if (WIFEXITED(tmp)) {
+                    sscanf(status, "exit value %d", WEXITSTATUS(tmp));
+                    printf("%s\n", status);
+                    fflush(stdout);
+                  }
+                  else {
+                    printf("something weird happened.\n");
+                    fflush(stdout);
+                  }
+                }
+
               }
               // Else: add child id to array and move on. Background case.
               else{
@@ -272,4 +329,10 @@ void replace_pid (char line[3000], pid_t pid){
   }
   strcpy(line, tmp_line);
   return;
+}
+
+void SIGINThandler(int sig){}
+
+void SIGTSTPhandler(int sig){
+
 }
