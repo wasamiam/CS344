@@ -9,8 +9,10 @@
 #include <fcntl.h>
 
 void replace_pid (char line[], pid_t pid);
-void SIGINThandler(int sig);
 void SIGTSTPhandler(int sig);
+
+// Global variables
+int force_fg;
 
 int main(int argc, char **argv){
   // Variables
@@ -29,6 +31,9 @@ int main(int argc, char **argv){
   int bg_flag = 0; // 0 means foreground, 1 means background.
   pid_t pid = getpid();
 
+  force_fg = 0; // 0 means background processes allowed, 1 means processes only run in foreground.
+
+
 
   /*
   *  SIGNAL HANDLING
@@ -36,36 +41,21 @@ int main(int argc, char **argv){
   sigset_t mask;
   sigfillset(&mask);
 
-  struct sigaction SIGINT_action = {
-    SIGINThandler,
-    mask,
-    0,
-    NULL
-  }, SIGTSTP_action = {
+  struct sigaction SIGTSTP_action = {
     SIGTSTPhandler,
     mask,
-    0,
+    SA_RESTART,
     NULL
   };
   signal(SIGINT, SIG_IGN);
-  /*
-  if (sigaction(SIGINT, &SIGINT_action, NULL) == -1) {
-    perror("Error: ");
-  }
-  */
+
   if (sigaction(SIGTSTP, &SIGTSTP_action, NULL) == -1) {
-    perror("Error: ");
+    perror("Error");
   }
 
   /*
-  SIGINT_action.sa_handler = catchSIGINT;
-  sigfillset(&SIGINT_action.sa_mask);
-  SIGINT_action.sa_flags = 0;
-  SIGTSTP_action.sa_handler = catchSIGUSR2;
-  sigfillset(&SIGUSR2_action.sa_mask);
-  SIGTSTP_action.sa_flags = 0;
+  * Commandline loop
   */
-  // Commandline loop
   do {
     // Check for completed background tasks
     if (n_pid > 0) {
@@ -74,10 +64,8 @@ int main(int argc, char **argv){
           break;
         }
         // Check if valid id
-        if(pid_array[i] == 0){
-        }
         // Wait for child
-        else{
+        if(pid_array[i] != 0){
           pid_t t;
           int s;
           if ( (t = waitpid(pid_array[i], &s, WNOHANG) ) == -1) {
@@ -103,26 +91,11 @@ int main(int argc, char **argv){
             pid_array[i] = 0; // Set pid to 0
             n_pid--;
           }
-          /*
-          else{
-            printf("Process %d incomplete - pi: %d\n", t, pid_array[i]);
-            fflush(stdout);
-          }
-          */
-          /*
-          if ( t > -1) {
-            printf("Process %d complete\n", t);
-            fflush(stdout);
-            pid_array[i] = 0; // Set pid to 0
-            n_pid--;
-          }
-          */
         }
       }
 
     }
     // Print prompt
-    //fflush(stdout);
     printf(": ");
     fflush(stdout);
 
@@ -138,23 +111,30 @@ int main(int argc, char **argv){
       bg_flag = 0;
       arg_flag = 0;
 
+      // Remove newline from input string.
       int l = strlen (line);
-      if (l > 0 && line[l - 1] == '\n'){line [l - 1] = '\0';} // Remove newline
+      if (l > 0 && line[l - 1] == '\n'){line [l - 1] = '\0';}
+
+      // Check for & and remove.
       l = strlen (line);
       if (l > 0 && line[l - 1] == '&'){
         line [l - 1] = '\0';
         line [l - 2] = '\0';
-        bg_flag = 1;
-      } // Check for & and remove.
+        // If forced foreground is off, allow processes to run in the background.
+        if (force_fg == 0) {
+          bg_flag = 1;
+        }
+      }
 
       replace_pid(line, pid);// Replace all $$ with process id
-      //printf("line2:  %s\n", line);
-      //fflush(stdout);
 
-      token = strtok(line, " "); // Get first token, which should be the command.
-      if(token == "#"){} // Skip if comment
+      if(line[0] == '#'){} // Skip if comment
       // Else: NOT a comment
       else{
+
+        // Get first token, which should be the command.
+        token = strtok(line, " ");
+
         // Command is 'exit'
         if (strcmp(token, "exit") == 0) {
           for (i = 0; i < 100; i++) {
@@ -200,7 +180,9 @@ int main(int argc, char **argv){
             }
           }
         }
-        // Else: command is NOT built-in
+        /*
+        ** Else: command is NOT built-in
+        */
         else{
           pid_t returnid = -2;
           returnid = fork();
@@ -209,8 +191,11 @@ int main(int argc, char **argv){
               printf("Error - child not created");
               fflush(stdout);
               break;
+
+            /*
+            **  Child
+            */
             case 0:
-              // Child
               signal (SIGINT, SIG_DFL);
               strcpy(arg_list[0], token);
               command_array[0] = arg_list[0]; // First pointer is command string
@@ -225,7 +210,8 @@ int main(int argc, char **argv){
                   if ((token = strtok(NULL, " ") ) != NULL) {
                     fr = open(token, O_RDONLY); // Open for read only
                     if (fr == -1) {
-                      perror("Error");
+                      printf("cannot open %s for input\n", token);
+                      fflush(stdout);
                       exit(1);
                     }
                     fcntl(fr, F_SETFD, FD_CLOEXEC);
@@ -238,7 +224,8 @@ int main(int argc, char **argv){
                   if ((token = strtok(NULL, " ") ) != NULL) {
                     fo = open(token, O_WRONLY | O_CREAT | O_TRUNC, 0644); // Open for write only
                     if (fo == -1) {
-                      perror("Error");
+                      printf("cannot open %s for output\n", token);
+                      fflush(stdout);
                       exit(1);
                     }
                     fcntl(fo, F_SETFD, FD_CLOEXEC);
@@ -266,20 +253,23 @@ int main(int argc, char **argv){
 
               err = execvp(command_array[0], command_array);
               if (err == -1) {
-                perror("Error");
+                perror("badfile");
                 exit(1);
               }
               break;
+
+            /*
+            **  Parent
+            */
             default:
-              // Parent
+              // Check for background.
               if (bg_flag == 0) {
                 int tmp = 0;
-                if (wait(&tmp) == -1) {
+                pid_t t;
+                if ( waitpid(returnid, &tmp, 0) == -1) {
                   perror("Error");
                 }
                 else{
-                  printf("tmp: %d\n", tmp);
-                  fflush(stdout);
                   if (WIFSIGNALED(tmp)) {
                     sprintf(status, "terminated by signal %d", WTERMSIG(tmp));
                     fflush(stdout);
@@ -289,17 +279,14 @@ int main(int argc, char **argv){
                   else if (WIFEXITED(tmp)) {
                     sprintf(status, "exit value %d", WEXITSTATUS(tmp));
                     fflush(stdout);
-                    printf("%s\n", status);
-                    fflush(stdout);
                   }
                   else {
                     printf("something weird happened.\n");
                     fflush(stdout);
                   }
                 }
-
               }
-              // Else: add child id to array and move on. Background case.
+              // Else: Background case - add child id to an empty spot in pid array and then break.
               else{
                 for (i = 0; i < 100; i++) {
                   if (pid_array[i] == 0) {
@@ -325,6 +312,9 @@ int main(int argc, char **argv){
   exit(0);
 }
 
+/*
+* Function to replace $$ with process id.
+*/
 void replace_pid (char line[3000], pid_t pid){
   char tmp_line[3000] = "";
   char* tmp_tok;
@@ -336,6 +326,7 @@ void replace_pid (char line[3000], pid_t pid){
   // Check if $$ is at end.
   int l = strlen (line);
   if (line[l-1] == '$' && line[l-2] == '$') {
+    // If so, get the string before $$, copy it back to the main string, and return.
     tmp_tok = strtok(line, "$$");
     strcat(tmp_line, tmp_tok);
     strcat(tmp_line, id);
@@ -343,6 +334,7 @@ void replace_pid (char line[3000], pid_t pid){
     return;
   }
 
+  // This case happens if $$ is not at the end, or occurs multiple times.
   tmp_tok = strtok(line, "$$");
   strcat(tmp_line, tmp_tok);
 
@@ -354,8 +346,21 @@ void replace_pid (char line[3000], pid_t pid){
   return;
 }
 
-void SIGINThandler(int sig){}
-
+/*
+* Funtion to handle SIGTSTP signal
+*/
 void SIGTSTPhandler(int sig){
 
+  // If forced foreground mode is OFF, turn ON
+  if (force_fg == 0) {
+    char* message = "Entering foreground-only mode (& is now ignored)\n";
+    write(STDOUT_FILENO, message, 49);
+    force_fg = 1;
+  }
+  // If forced foreground mode is ON, turn OFF
+  else{
+    char* message = "Exiting foreground-only mode\n";
+    write(STDOUT_FILENO, message, 29);
+    force_fg = 0;
+  }
 }
