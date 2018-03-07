@@ -16,7 +16,7 @@ int main(int argc, char **argv){
   // Variables
   char line[3000] = "";
   char* token;
-  int status = 0;
+  char status[200];
   pid_t pid_array[100]; // static arrays are initialized as 0
   int n_pid = 0; // Number of process ids in the pid_array - used with exit command to minimize array search time.
   int err = 0; // Hold error values from functions
@@ -79,17 +79,36 @@ int main(int argc, char **argv){
         // Wait for child
         else{
           pid_t t;
-          t = waitpid(pid_array[i], &status, WNOHANG);
-          if (t != 0) {
-            printf("Process %d complete\n", t);
+          int s;
+          if ( (t = waitpid(pid_array[i], &s, WNOHANG) ) == -1) {
+            perror("Error");
+          }
+          else if(t > 0){
+            // Set the status
+            if (WIFSIGNALED(s)) {
+              sprintf(status, "terminated by signal %d", WTERMSIG(s));
+              fflush(stdout);
+            }
+            else if (WIFEXITED(s)) {
+              sprintf(status, "exit value %d", WEXITSTATUS(s));
+              fflush(stdout);
+            }
+            else {
+              printf("something weird happened.\n");
+              fflush(stdout);
+            }
+            // Print, remove pid from array, and deduct 1 from the array's counter.
+            printf("background pid %d is done: %s\n", t, status);
             fflush(stdout);
             pid_array[i] = 0; // Set pid to 0
             n_pid--;
           }
+          /*
           else{
             printf("Process %d incomplete - pi: %d\n", t, pid_array[i]);
             fflush(stdout);
           }
+          */
           /*
           if ( t > -1) {
             printf("Process %d complete\n", t);
@@ -159,7 +178,7 @@ int main(int argc, char **argv){
         }
         // Command is 'status'
         else if (strcmp(token, "status") == 0) {
-          printf("exit value %d\n", status);
+          printf("%s\n",status);
           fflush(stdout);
         }
         // Command is 'cd'
@@ -259,13 +278,17 @@ int main(int argc, char **argv){
                   perror("Error");
                 }
                 else{
+                  printf("tmp: %d\n", tmp);
+                  fflush(stdout);
                   if (WIFSIGNALED(tmp)) {
-                    sscanf(status, "terminated by signal %d", WTERMSIG(tmp));
+                    sprintf(status, "terminated by signal %d", WTERMSIG(tmp));
+                    fflush(stdout);
                     printf("%s\n", status);
                     fflush(stdout);
                   }
                   else if (WIFEXITED(tmp)) {
-                    sscanf(status, "exit value %d", WEXITSTATUS(tmp));
+                    sprintf(status, "exit value %d", WEXITSTATUS(tmp));
+                    fflush(stdout);
                     printf("%s\n", status);
                     fflush(stdout);
                   }
@@ -282,7 +305,7 @@ int main(int argc, char **argv){
                   if (pid_array[i] == 0) {
                     pid_array[i] = returnid;
                     n_pid++;
-                    printf("Child id: %d\n", pid_array[i]);
+                    printf("background pid is %d\n", pid_array[i]);
                     fflush(stdout);
                     break;
                   }
