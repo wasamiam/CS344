@@ -11,6 +11,45 @@ void error(const char *msg) {
   exit(1);
 } // Error function used for reporting issues
 
+void encode(char *key, char *plaintext, char *returnString){
+
+  char encoded[70002] = "";
+  int i;
+  int keyChar;
+  int textChar;
+  int encChar;
+
+  for (i = 0; i < strlen(plaintext); i++) {
+    // convert ASCII  for key
+    if (key[i] == ' ') {
+      keyChar = 26;
+    } // if space char
+    else {
+      keyChar = (key[i] - 'A');
+    } // else: char is letter
+
+    // convert ASCII  for plaintext
+    if (plaintext[i] == ' ') {
+      textChar = 26;
+    } // if space char
+    else{
+      textChar = (plaintext[i] - 'A');
+    } // else: char is letter
+
+    encChar = ( (keyChar + textChar) % 27);
+    if (encChar == 26) {
+      encoded[i] = ' ';
+    } // if: char is a space
+    else{
+      encoded[i] = ('A' + encChar);
+    }
+  }
+
+  encoded[i] = '\n';
+  strcpy(returnString, encoded);
+
+}
+
 int main(int argc, char *argv[])
 {
   int listenSocketFD, establishedConnectionFD, portNumber, charsWritten, charsRead;
@@ -110,10 +149,20 @@ int main(int argc, char *argv[])
 
       } while(strstr(buffer, "@") == NULL);
 
-      //printf("SERVER: Plaintext: \"%s\"\n", plaintext);
+      // Remove @ chars
+      char *charP = strchr(key, '@');
+      if (charP != NULL) {
+        charP[0] = '\0';
+      }
 
-      strcpy(returnString, key);
-      printf("Server: %s\n", returnString);
+      charP = strchr(plaintext, '@');
+      if (charP != NULL) {
+        charP[0] = '\0';
+      }
+
+      // encode message
+      encode(key, plaintext, returnString);
+
       // Send final text to client
       char *ptr = (char*) returnString;
       int length = strlen(returnString);
