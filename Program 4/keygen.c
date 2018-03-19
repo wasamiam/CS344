@@ -20,8 +20,9 @@ int main(int argc, char *argv[]){
     }
   }
 
-  char finalkey[keylength]; // Create string
-  finalkey[keylength] = '\0'; // Make sure end is null
+  char finalkey[keylength + 1]; // Create string
+  finalkey[keylength + 1] = '\0'; // Make sure end is null
+  finalkey[keylength] = '\n'; // Add newline
 
   for (i = 0; i < keylength; i++) {
     int r = ( rand() % 27 );
@@ -32,8 +33,8 @@ int main(int argc, char *argv[]){
       finalkey[i] = ('A' + r);
     } // Letter case
   }
-
-  printf("%s\n", finalkey);
+  fflush(stdout);
+  printf("%s", finalkey);
 
   exit(0);
 }
