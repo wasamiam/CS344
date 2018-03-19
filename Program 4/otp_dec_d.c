@@ -11,7 +11,7 @@ void error(const char *msg) {
   exit(1);
 } // Error function used for reporting issues
 
-void encode(char *key, char *plaintext, char *returnString){
+void decode(char *key, char *plaintext, char *returnString){
 
   char encoded[70002] = "";
   int i;
@@ -36,7 +36,10 @@ void encode(char *key, char *plaintext, char *returnString){
       textChar = (plaintext[i] - 'A');
     } // else: char is letter
 
-    encChar = ( (keyChar + textChar) % 27);
+    encChar = ( (textChar - keyChar) % 27);
+    if (encChar < 0) {
+      encChar += 27;
+    }
     if (encChar == 26) {
       encoded[i] = ' ';
     } // if: char is a space
@@ -94,27 +97,24 @@ int main(int argc, char *argv[])
     else if (pid == 0) {
 
       char idbuff[1] = "";
-      // Check if client is correct - 1 == enc, 2 == dec - should be 1 for this file.
+      // Check if client is correct - 1 == enc, 2 == dec - should be 2 for this file.
       charsRead = recv(establishedConnectionFD, idbuff, 1, 0);
       if (charsRead < 0){
         error("ERROR reading from socket");
       }
-      else if (idbuff[0] != '1') {
+      else if (idbuff[0] != '2') {
         strcpy(idbuff, "0");
         charsWritten = send(establishedConnectionFD, idbuff, strlen(idbuff), 0);
         if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
-        error("Error - not encoding client.");
+        exit(2);
       }
       else{
         strcpy(idbuff, "1");
         send(establishedConnectionFD, idbuff, strlen(idbuff), 0);
       }
 
-
       // Create full string
       char returnString[70002] = "";
-
-      //printf("SERVER: Connected Client at port %d\n", ntohs(clientAddress.sin_port));
 
       // Get key from client
       do {
@@ -123,13 +123,8 @@ int main(int argc, char *argv[])
         if (charsRead < 0) error("ERROR reading from socket");
         //printf("SERVER: I received this from the client: \"%s\"\n", buffer);
         strcat(key, buffer);
-        // Send a Success message back to the client
-        //charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-        //if (charsRead < 0) error("ERROR writing to socket");
 
       } while(strstr(buffer, "@") == NULL);
-
-      //printf("%s", key);
 
       // Tell client to send plaintext
       strcpy(idbuff, "1");
@@ -141,12 +136,7 @@ int main(int argc, char *argv[])
         memset(buffer, '\0', 256);
         charsRead = recv(establishedConnectionFD, buffer, 255, 0); // Read the client's message from the socket
         if (charsRead < 0) error("ERROR reading from socket");
-        //printf("SERVER: I received this from the client: \"%s\"\n", buffer);
         strcat(plaintext, buffer);
-        // Send a Success message back to the client
-        //charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-        //if (charsRead < 0) error("ERROR writing to socket");
-
       } while(strstr(buffer, "@") == NULL);
 
       // Remove @ chars
@@ -154,14 +144,13 @@ int main(int argc, char *argv[])
       if (charP != NULL) {
         charP[0] = '\0';
       }
-
       charP = strchr(plaintext, '@');
       if (charP != NULL) {
         charP[0] = '\0';
       }
 
       // encode message
-      encode(key, plaintext, returnString);
+      decode(key, plaintext, returnString);
 
       // Send final text to client
       char *ptr = (char*) returnString;
@@ -177,10 +166,6 @@ int main(int argc, char *argv[])
       close(establishedConnectionFD); // Close the existing socket which is connected to the client
       exit(0);
     } // Child case
-    else{
-
-    } // Parent case
-
   }
 
   close(listenSocketFD); // Close the listening socket

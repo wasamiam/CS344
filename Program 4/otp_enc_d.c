@@ -36,7 +36,7 @@ void encode(char *key, char *plaintext, char *returnString){
       textChar = (plaintext[i] - 'A');
     } // else: char is letter
 
-    encChar = ( (keyChar + textChar) % 27);
+    encChar = ( (textChar + keyChar) % 27);
     if (encChar == 26) {
       encoded[i] = ' ';
     } // if: char is a space
@@ -103,33 +103,23 @@ int main(int argc, char *argv[])
         strcpy(idbuff, "0");
         charsWritten = send(establishedConnectionFD, idbuff, strlen(idbuff), 0);
         if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
-        error("Error - not encoding client.");
+        exit(2);
       }
       else{
         strcpy(idbuff, "1");
         send(establishedConnectionFD, idbuff, strlen(idbuff), 0);
       }
 
-
       // Create full string
       char returnString[70002] = "";
-
-      //printf("SERVER: Connected Client at port %d\n", ntohs(clientAddress.sin_port));
 
       // Get key from client
       do {
         memset(buffer, '\0', 256);
         charsRead = recv(establishedConnectionFD, buffer, 255, 0); // Read the client's message from the socket
         if (charsRead < 0) error("ERROR reading from socket");
-        //printf("SERVER: I received this from the client: \"%s\"\n", buffer);
         strcat(key, buffer);
-        // Send a Success message back to the client
-        //charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-        //if (charsRead < 0) error("ERROR writing to socket");
-
       } while(strstr(buffer, "@") == NULL);
-
-      //printf("%s", key);
 
       // Tell client to send plaintext
       strcpy(idbuff, "1");
@@ -141,12 +131,7 @@ int main(int argc, char *argv[])
         memset(buffer, '\0', 256);
         charsRead = recv(establishedConnectionFD, buffer, 255, 0); // Read the client's message from the socket
         if (charsRead < 0) error("ERROR reading from socket");
-        //printf("SERVER: I received this from the client: \"%s\"\n", buffer);
         strcat(plaintext, buffer);
-        // Send a Success message back to the client
-        //charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-        //if (charsRead < 0) error("ERROR writing to socket");
-
       } while(strstr(buffer, "@") == NULL);
 
       // Remove @ chars
@@ -177,10 +162,6 @@ int main(int argc, char *argv[])
       close(establishedConnectionFD); // Close the existing socket which is connected to the client
       exit(0);
     } // Child case
-    else{
-
-    } // Parent case
-
   }
 
   close(listenSocketFD); // Close the listening socket

@@ -56,7 +56,8 @@ int main(int argc, char *argv[])
 
   // Check key and plaintext for bad chars and correct size.
   if (strlen(key) < strlen(plaintext)) {
-    error("Error - key is shorter than plaintext:");
+    fprintf(stderr,"Error - key is shorter than plaintext.\n");
+    exit(1);
   }
   // Check key
   int j;
@@ -64,7 +65,8 @@ int main(int argc, char *argv[])
   for (j = 0; j < arraylen; j++) {
     if (isupper(key[j]) == 0) {
       if (key[j] != ' ' && key[j] != '@') {
-        error("Error - Bad character in key:");
+        fprintf(stderr,"Error - Bad character in key.\n");
+        exit(1);
       } // is char a space?
     } // is char a uppercase letter?
   }
@@ -73,7 +75,8 @@ int main(int argc, char *argv[])
   for (j = 0; j < arraylen; j++) {
     if (isupper(plaintext[j]) == 0) {
       if (plaintext[j] != ' ' && plaintext[j] != '@') {
-        error("Error - Bad character in plaintext:");
+        fprintf(stderr,"Error - Bad character in plaintext.\n");
+        exit(1);
       } // is char a space?
     } // is char a uppercase letter?
   }
@@ -99,14 +102,14 @@ int main(int argc, char *argv[])
   charsWritten = send(socketFD, idbuff, strlen(idbuff), 0);
   if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
 
-  charsRead = recv(socketFD, idbuff, 1, 0);
+  charsRead = recv(socketFD, idbuff, 1, 0); // Check if server is correct.
   if (charsRead < 0){
     error("ERROR reading from socket");
   }
   else if (idbuff[0] != '1') {
-    perror("Error - not encoding server.");
+    fprintf(stderr,"Error - not encoding server.");
     exit(2);
-  }
+  } // else if: server did not return 1 for correct.
 
 
   // Send key to server
